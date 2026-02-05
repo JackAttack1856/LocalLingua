@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v3
+      - name: Install backend deps
+        run: |
+          cd backend
+          uv sync --extra dev
+      - name: Run backend tests
+        run: |
+          cd backend
+          uv run pytest
+      - name: Ruff
+        run: |
+          cd backend
+          uv run ruff check .
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install frontend deps
+        run: |
+          cd frontend
+          pnpm install
+      - name: Frontend tests
+        run: |
+          cd frontend
+          pnpm test
+      - name: ESLint
+        run: |
+          cd frontend
+          pnpm lint

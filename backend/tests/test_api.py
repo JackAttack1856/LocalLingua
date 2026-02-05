@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+import os
+
+import pytest
+import httpx
+
+from app.main import create_app
+from app.config import load_settings
+from app.translator.fake import FakeTranslator
+
+
+@pytest.fixture(autouse=True)
+def _env():
+    os.environ["LOCALLINGUA_ALLOW_FAKE_TRANSLATOR"] = "1"
+    os.environ.pop("LOCALLINGUA_MODEL_PATH", None)
+    yield
+
+
+@pytest.fixture()
+def app():
+    a = create_app()
+    a.state.settings = load_settings()
+    a.state.translator = FakeTranslator()
+    return a
+
+
+@pytest.mark.asyncio
+async def test_health(app):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.get("/api/health")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "ok"
+    assert body["model_loaded"] is True
+
+
+@pytest.mark.asyncio
+async def test_languages(app):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.get("/api/languages")
+    assert res.status_code == 200
+    body = res.json()
+    assert "languages" in body
+    assert any(l["code"] == "en" for l in body["languages"])
+
+
+@pytest.mark.asyncio
+async def test_translate_validates_languages(app):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/translate",
+            json={"text": "hello", "source_lang": "xx", "target_lang": "es", "options": {}},
+        )
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "UNSUPPORTED_SOURCE_LANG"
+
+
+@pytest.mark.asyncio
+async def test_translate_success(app):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        res = await ac.post(
+            "/api/translate",
+            json={"text": "Hello world", "source_lang": "auto", "target_lang": "es", "options": {}},
+        )
+    assert res.status_code == 200
+    body = res.json()
+    assert "translated_text" in body
+    assert body["latency_ms"] >= 0
