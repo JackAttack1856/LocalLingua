@@ -283,15 +283,7 @@ function AppInner() {
           </div>
 
           <h1 className="col-start-2 row-start-1 text-xl font-semibold leading-none tracking-tight">LocalLingua</h1>
-          <div className="col-start-3 row-start-1 min-w-0 truncate text-right text-xs text-foreground/60">
-            Backend model: {health.data?.model_name ?? "not loaded"} · API base:{" "}
-            {import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}
-          </div>
-
-          <p className="col-start-2 row-start-2 text-xs leading-none text-foreground/70">
-            Enter translate · Shift+Enter newline · ⌘⇧C copy
-          </p>
-          <div className="col-start-3 row-start-2 flex justify-end">
+          <div className="col-start-3 row-start-1 flex justify-end">
             <Button
               variant="ghost"
               size="sm"
@@ -299,13 +291,20 @@ function AppInner() {
               onClick={() => {
                 const next: Theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
                 setTheme(next);
-                push(`Theme: ${next}`);
               }}
               title="Toggle theme (system → light → dark)"
             >
               <ThemeIcon theme={theme} />
               <span className="hidden sm:inline">{theme}</span>
             </Button>
+          </div>
+
+          <p className="col-start-2 row-start-2 text-xs leading-none text-foreground/70">
+            Enter translate · Shift+Enter newline · ⌘⇧C copy
+          </p>
+          <div className="col-start-3 row-start-2 min-w-0 truncate text-right text-xs leading-none text-foreground/60">
+            Backend model: {health.data?.model_name ?? "not loaded"} · API base:{" "}
+            {import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}
           </div>
         </header>
 
