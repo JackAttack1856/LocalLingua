@@ -93,9 +93,13 @@ def create_app() -> FastAPI:
         if isinstance(translator, FakeTranslator):
             return HealthResponse(model_loaded=True, model_name="FakeTranslator")
         # For llama.cpp, consider "loaded" if a model path is set and exists.
-        if settings.model_path and Path(settings.model_path).expanduser().exists():
-            return HealthResponse(model_loaded=True, model_name=settings.model_name)
-        return HealthResponse(model_loaded=False, model_name=None)
+        if isinstance(translator, LlamaCppTranslator):
+            if settings.model_path and Path(settings.model_path).expanduser().exists():
+                return HealthResponse(model_loaded=True, model_name=settings.model_name)
+            return HealthResponse(model_loaded=False, model_name=None)
+
+        # For dependency-injected/custom translators (including tests), treat presence as loaded.
+        return HealthResponse(model_loaded=True, model_name=settings.model_name or translator.__class__.__name__)
 
     @app.get("/api/languages", response_model=LanguagesResponse)
     async def languages() -> LanguagesResponse:
