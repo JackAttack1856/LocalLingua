@@ -59,5 +59,5 @@ If you want to develop the UI without a model, set:
 4. Open History and restore a previous translation.
 
 ---
-Made using ChatGPT Codex
+Built with AI assistance
 
