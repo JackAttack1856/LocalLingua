@@ -1,4 +1,3 @@
-import os
 import time
 from pathlib import Path
 from typing import Annotated
@@ -43,7 +42,10 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(ApiError)
     async def _api_error_handler(_request: Request, exc: ApiError):
-        return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": exc.message}})
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": {"code": exc.code, "message": exc.message}},
+        )
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error_handler(_request: Request, exc: RequestValidationError):
@@ -99,11 +101,16 @@ def create_app() -> FastAPI:
             return HealthResponse(model_loaded=False, model_name=None)
 
         # For dependency-injected/custom translators (including tests), treat presence as loaded.
-        return HealthResponse(model_loaded=True, model_name=settings.model_name or translator.__class__.__name__)
+        return HealthResponse(
+            model_loaded=True,
+            model_name=settings.model_name or translator.__class__.__name__,
+        )
 
     @app.get("/api/languages", response_model=LanguagesResponse)
     async def languages() -> LanguagesResponse:
-        return LanguagesResponse(languages=[{"code": l.code, "name": l.name} for l in LANGUAGES])
+        return LanguagesResponse(
+            languages=[{"code": lang.code, "name": lang.name} for lang in LANGUAGES],
+        )
 
     @app.post("/api/translate", response_model=TranslateResponse)
     async def translate(
@@ -112,9 +119,17 @@ def create_app() -> FastAPI:
         translator: Annotated[Translator | None, Depends(get_translator)],
     ) -> TranslateResponse:
         if req.source_lang != "auto" and not is_supported(req.source_lang):
-            raise ApiError("UNSUPPORTED_SOURCE_LANG", f"Unsupported source_lang: {req.source_lang}", 400)
+            raise ApiError(
+                "UNSUPPORTED_SOURCE_LANG",
+                f"Unsupported source_lang: {req.source_lang}",
+                400,
+            )
         if not is_supported(req.target_lang):
-            raise ApiError("UNSUPPORTED_TARGET_LANG", f"Unsupported target_lang: {req.target_lang}", 400)
+            raise ApiError(
+                "UNSUPPORTED_TARGET_LANG",
+                f"Unsupported target_lang: {req.target_lang}",
+                400,
+            )
 
         if translator is None:
             if settings.model_path and not Path(settings.model_path).expanduser().exists():
@@ -125,7 +140,8 @@ def create_app() -> FastAPI:
                 )
             raise ApiError(
                 "MODEL_NOT_CONFIGURED",
-                "No local model is configured. Set LOCALLINGUA_MODEL_PATH (or enable LOCALLINGUA_ALLOW_FAKE_TRANSLATOR=1).",
+                "No local model is configured. Set LOCALLINGUA_MODEL_PATH "
+                "(or enable LOCALLINGUA_ALLOW_FAKE_TRANSLATOR=1).",
                 503,
             )
 
@@ -136,7 +152,8 @@ def create_app() -> FastAPI:
             detection = detect_language(req.text)
             detection_confidence = detection.confidence
             if detection.code and is_supported(detection.code):
-                # Be more permissive for short inputs so we don't fall back to "Unknown" unnecessarily.
+                # Be more permissive for short inputs so we don't fall back to "Unknown"
+                # unnecessarily.
                 threshold = 0.35 if len(req.text.strip()) <= 20 else 0.70
                 if (detection.confidence or 0.0) >= threshold:
                     detected = detection.code
@@ -153,19 +170,20 @@ def create_app() -> FastAPI:
                     target_lang=req.target_lang,
                     options={**req.options.model_dump(), "mode": mode},
                 )
-            except FileNotFoundError:
+            except FileNotFoundError as exc:
                 raise ApiError(
                     "MODEL_NOT_FOUND",
                     "The configured model file was not found. Check LOCALLINGUA_MODEL_PATH.",
                     503,
-                )
+                ) from exc
             except RuntimeError as exc:
                 if str(exc) == "LLAMA_CPP_NOT_INSTALLED":
                     raise ApiError(
                         "LLAMA_CPP_NOT_INSTALLED",
-                        "llama-cpp-python is not installed. Install backend deps with the llama extra.",
+                        "llama-cpp-python is not installed. Install backend deps with the llama "
+                        "extra.",
                         503,
-                    )
+                    ) from exc
                 raise
 
         used_mode: str | None = None
@@ -182,11 +200,17 @@ def create_app() -> FastAPI:
             should_retry = (
                 _has_any_letter(req.text)
                 and _is_passthrough(source_text=req.text, translated_text=result.translated_text)
-                and not (effective_source_lang != "auto" and req.target_lang == effective_source_lang)
+                and not (
+                    effective_source_lang != "auto"
+                    and req.target_lang == effective_source_lang
+                )
             )
             if should_retry:
                 natural_result = await _run_translate("natural")
-                if not _is_passthrough(source_text=req.text, translated_text=natural_result.translated_text):
+                if not _is_passthrough(
+                    source_text=req.text,
+                    translated_text=natural_result.translated_text,
+                ):
                     result = natural_result
                     used_mode = "natural"
 
@@ -195,7 +219,8 @@ def create_app() -> FastAPI:
         if not result.translated_text.strip():
             raise ApiError(
                 "MODEL_EMPTY_OUTPUT",
-                "The model returned an empty translation. Try a different text or model quantization.",
+                "The model returned an empty translation. Try a different text or model "
+                "quantization.",
                 503,
             )
 
@@ -215,7 +240,10 @@ def _build_translator(settings: Settings) -> Translator | None:
         model_path = Path(settings.model_path).expanduser()
         if model_path.exists():
             return LlamaCppTranslator(
-                LlamaCppConfig(model_path=str(model_path), max_concurrency=settings.max_concurrency)
+                LlamaCppConfig(
+                    model_path=str(model_path),
+                    max_concurrency=settings.max_concurrency,
+                ),
             )
         return None
 

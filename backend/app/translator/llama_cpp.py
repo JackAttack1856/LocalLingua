@@ -75,7 +75,7 @@ class LlamaCppTranslator(Translator):
                 )
 
             result = await asyncio.to_thread(_run)
-            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            _elapsed_ms = int((time.perf_counter() - start) * 1000)
 
         text_out = ""
         try:

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import os
 
-import pytest
 import httpx
+import pytest
 
-from app.main import create_app
 from app.config import load_settings
+from app.main import create_app
 from app.translator.base import TranslationResult, Translator
 
 
@@ -26,7 +26,14 @@ def app():
 
 
 class _StubTranslator(Translator):
-    async def translate(self, *, text: str, source_lang: str, target_lang: str, options: dict) -> TranslationResult:
+    async def translate(
+        self,
+        *,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        options: dict,
+    ) -> TranslationResult:
         mode = options.get("mode")
         if mode == "natural":
             return TranslationResult(translated_text=f"NAT:{text}", detected_source_lang=None)
@@ -52,7 +59,7 @@ async def test_languages(app):
     assert res.status_code == 200
     body = res.json()
     assert "languages" in body
-    assert any(l["code"] == "en" for l in body["languages"])
+    assert any(lang["code"] == "en" for lang in body["languages"])
 
 
 @pytest.mark.asyncio
@@ -73,7 +80,12 @@ async def test_translate_success(app):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         res = await ac.post(
             "/api/translate",
-            json={"text": "Hello world", "source_lang": "auto", "target_lang": "es", "options": {"mode": "smart"}},
+            json={
+                "text": "Hello world",
+                "source_lang": "auto",
+                "target_lang": "es",
+                "options": {"mode": "smart"},
+            },
         )
     assert res.status_code == 200
     body = res.json()
@@ -87,7 +99,12 @@ async def test_translate_smart_retries_on_passthrough(app):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         res = await ac.post(
             "/api/translate",
-            json={"text": "cheeseburger", "source_lang": "auto", "target_lang": "es", "options": {"mode": "smart"}},
+            json={
+                "text": "cheeseburger",
+                "source_lang": "auto",
+                "target_lang": "es",
+                "options": {"mode": "smart"},
+            },
         )
     assert res.status_code == 200
     body = res.json()
@@ -101,7 +118,12 @@ async def test_translate_literal_does_not_retry(app):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         res = await ac.post(
             "/api/translate",
-            json={"text": "cheeseburger", "source_lang": "auto", "target_lang": "es", "options": {"mode": "literal"}},
+            json={
+                "text": "cheeseburger",
+                "source_lang": "auto",
+                "target_lang": "es",
+                "options": {"mode": "literal"},
+            },
         )
     assert res.status_code == 200
     body = res.json()
