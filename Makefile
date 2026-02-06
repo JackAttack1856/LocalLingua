@@ -7,7 +7,12 @@ dev-backend:
 	@cd backend && uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 dev-frontend:
-	@cd frontend && pnpm dev --host 127.0.0.1 --port 5173
+	@cd frontend && \
+		if [ ! -x node_modules/.bin/vite ]; then \
+			echo "Frontend deps missing (vite not found). Running pnpm install..."; \
+			pnpm install; \
+		fi && \
+		pnpm dev --host 127.0.0.1 --port 5173
 
 test: test-backend test-frontend
 
@@ -24,4 +29,3 @@ lint-backend:
 
 lint-frontend:
 	@cd frontend && pnpm lint
-
