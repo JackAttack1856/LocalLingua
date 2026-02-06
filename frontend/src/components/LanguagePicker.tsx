@@ -69,7 +69,7 @@ export function LanguagePicker({
         )}
       >
         <span className={cn("truncate", isPlaceholder && placeholderClassName)}>{selected}</span>
-        <span className="ml-1 text-sm text-foreground/60 opacity-0 transition-opacity duration-200 ease-out-expo group-hover:opacity-100 group-focus-visible:opacity-100">
+        <span className="ml-1 text-sm text-foreground/60 opacity-100 transition-opacity duration-200 ease-out-expo">
           ▾
         </span>
       </button>

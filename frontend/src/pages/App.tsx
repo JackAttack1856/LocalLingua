@@ -169,6 +169,7 @@ function AppInner() {
     translated &&
     (translated.detected_source_lang ??
       (sourceLang === "auto" ? "??" : sourceLang));
+  const canAdoptDetectedSource = sourceLang === "auto" && Boolean(translated?.detected_source_lang);
   const trailWidth = Math.max(trailFrameSize.width, 1);
   const trailHeight = Math.max(trailFrameSize.height, 1);
   const trailInset = 0.5;
@@ -685,18 +686,37 @@ function AppInner() {
                 </button>
               </div>
               {detectedPill ? (
-                <Badge
-                  className="font-mono"
-                  title={
-                    translated?.detected_source_lang
-                      ? "Detected source language"
-                      : sourceLang === "auto"
-                        ? "Detection uncertain"
-                        : "Selected source language"
-                  }
-                >
-                  {detectedPill}
-                </Badge>
+                canAdoptDetectedSource ? (
+                  <button
+                    type="button"
+                    onClick={() => setSourceLang(translated?.detected_source_lang ?? "auto")}
+                    title="Click to set source language"
+                    aria-label="Use detected source language"
+                    className={[
+                      "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium",
+                      "border-border bg-surface2 text-foreground/80",
+                      "transition-colors duration-200 ease-out-expo",
+                      "font-mono",
+                      "hover:bg-muted",
+                      "focus:outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/35",
+                    ].join(" ")}
+                  >
+                    {detectedPill}
+                  </button>
+                ) : (
+                  <Badge
+                    className="font-mono"
+                    title={
+                      translated?.detected_source_lang
+                        ? "Detected source language"
+                        : sourceLang === "auto"
+                          ? "Detection uncertain"
+                          : "Selected source language"
+                    }
+                  >
+                    {detectedPill}
+                  </Badge>
+                )
               ) : null}
             </div>
             <div className="flex items-center justify-center">
@@ -710,9 +730,6 @@ function AppInner() {
               </Button>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button variant="secondary" onClick={onCopy} disabled={!translated?.translated_text} size="sm">
-                Copy
-              </Button>
               <Button variant="secondary" onClick={onDownload} disabled={!translated?.translated_text} size="sm">
                 Download .txt
               </Button>
