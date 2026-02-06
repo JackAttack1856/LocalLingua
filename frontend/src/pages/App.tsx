@@ -13,6 +13,9 @@ const MODE_KEY = "locallingua.mode.v1";
 type Theme = "light" | "dark" | "system";
 const THEME_KEY = "locallingua.theme.v1";
 
+const AUTO_TRANSLATE_DEBOUNCE_MS = 650;
+const AUTO_TRANSLATE_MAX_CHARS = 10_000;
+
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
   const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
@@ -76,12 +79,27 @@ function AppInner() {
   const sourceTextRef = React.useRef<HTMLTextAreaElement | null>(null);
   const [isSwapping, setIsSwapping] = React.useState(false);
   const swapTimerRef = React.useRef<number | null>(null);
+  const autoTranslateTimerRef = React.useRef<number | null>(null);
+  const lastCompletedTranslateKeyRef = React.useRef<string>("");
+  const inFlightTranslateKeyRef = React.useRef<string>("");
+  const [sourceCopied, setSourceCopied] = React.useState(false);
+  const [translationCopied, setTranslationCopied] = React.useState(false);
+  const sourceCopiedTimerRef = React.useRef<number | null>(null);
+  const translationCopiedTimerRef = React.useRef<number | null>(null);
 
   const health = useQuery({ queryKey: ["health"], queryFn: fetchHealth, refetchInterval: 10_000 });
   const languages = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
 
+  const makeTranslateKey = React.useCallback(
+    (text: string, src: string, tgt: string, selectedMode: Mode) => {
+      return JSON.stringify({ text, src, tgt, selectedMode });
+    },
+    [],
+  );
+
   const translateMutation = useMutation({
     mutationFn: async () => {
+      inFlightTranslateKeyRef.current = makeTranslateKey(sourceText, sourceLang, targetLang, mode);
       return postTranslate({
         text: sourceText,
         source_lang: sourceLang,
@@ -91,6 +109,7 @@ function AppInner() {
     },
     onSuccess: (res) => {
       setTranslated(res);
+      lastCompletedTranslateKeyRef.current = inFlightTranslateKeyRef.current;
       const item: HistoryItem = {
         id: crypto.randomUUID(),
         createdAt: Date.now(),
@@ -164,6 +183,40 @@ function AppInner() {
   }, [translateMutation]);
 
   React.useEffect(() => {
+    if (autoTranslateTimerRef.current) window.clearTimeout(autoTranslateTimerRef.current);
+
+    if (!modelReady) return;
+    if (translateMutation.isPending) return;
+    if (!targetLang) return;
+    if (sourceText.trim().length === 0) return;
+    if (sourceText.length > AUTO_TRANSLATE_MAX_CHARS) return;
+
+    const key = makeTranslateKey(sourceText, sourceLang, targetLang, mode);
+    if (key === lastCompletedTranslateKeyRef.current) return;
+
+    autoTranslateTimerRef.current = window.setTimeout(() => {
+      // Avoid firing if inputs changed again; the effect will schedule a new timer.
+      const stillKey = makeTranslateKey(sourceText, sourceLang, targetLang, mode);
+      if (stillKey !== key) return;
+      if (!canTranslate) return;
+      translateMutation.mutate();
+    }, AUTO_TRANSLATE_DEBOUNCE_MS);
+
+    return () => {
+      if (autoTranslateTimerRef.current) window.clearTimeout(autoTranslateTimerRef.current);
+    };
+  }, [
+    canTranslate,
+    makeTranslateKey,
+    mode,
+    modelReady,
+    sourceLang,
+    sourceText,
+    targetLang,
+    translateMutation,
+  ]);
+
+  React.useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.isComposing) return;
       const active = document.activeElement as HTMLElement | null;
@@ -203,12 +256,30 @@ function AppInner() {
       setIsSwapping(true);
       swapTimerRef.current = window.setTimeout(() => setIsSwapping(false), 320);
     }
+
+    const prevTranslatedText = translated?.translated_text ?? "";
+    const prevDetectedSource = translated?.detected_source_lang ?? "";
+    const prevSourceText = sourceText;
+
     if (sourceLang === "auto") {
-      const nextTarget = translated?.detected_source_lang ?? "";
-      setSourceLang(targetLang);
+      const nextTarget = prevDetectedSource;
+      setSourceLang(targetLang || "auto");
       setTargetLang(nextTarget);
-      setTranslated(null);
-      setSourceText("");
+      if (prevTranslatedText) {
+        setSourceText(prevTranslatedText);
+        if (nextTarget) {
+          setTranslated({
+            translated_text: prevSourceText,
+            detected_source_lang: null,
+            used_mode: null,
+            latency_ms: 0,
+          });
+        } else {
+          setTranslated(null);
+        }
+      } else {
+        setTranslated(null);
+      }
       if (!nextTarget) {
         push("Pick a target language after swap");
       }
@@ -217,8 +288,17 @@ function AppInner() {
     const nextSource = targetLang || "auto";
     setSourceLang(nextSource);
     setTargetLang(sourceLang);
-    setTranslated(null);
-    setSourceText("");
+    if (prevTranslatedText) {
+      setSourceText(prevTranslatedText);
+      setTranslated({
+        translated_text: prevSourceText,
+        detected_source_lang: null,
+        used_mode: null,
+        latency_ms: 0,
+      });
+    } else {
+      setTranslated(null);
+    }
   };
 
   const onOutputClick = () => {
@@ -226,11 +306,30 @@ function AppInner() {
     sourceTextRef.current?.focus();
   };
 
+  const onCopySource = async () => {
+    if (sourceText.trim().length === 0) return;
+    await navigator.clipboard.writeText(sourceText);
+    push("Copied source text");
+  };
+
   const onCopy = async () => {
     if (!translated?.translated_text) return;
     await navigator.clipboard.writeText(translated.translated_text);
     push("Copied translation");
   };
+
+  const flashCopied = React.useCallback((which: "source" | "translation") => {
+    const durationMs = 900;
+    if (which === "source") {
+      if (sourceCopiedTimerRef.current) window.clearTimeout(sourceCopiedTimerRef.current);
+      setSourceCopied(true);
+      sourceCopiedTimerRef.current = window.setTimeout(() => setSourceCopied(false), durationMs);
+      return;
+    }
+    if (translationCopiedTimerRef.current) window.clearTimeout(translationCopiedTimerRef.current);
+    setTranslationCopied(true);
+    translationCopiedTimerRef.current = window.setTimeout(() => setTranslationCopied(false), durationMs);
+  }, []);
 
   const onDownload = () => {
     if (!translated?.translated_text) return;
@@ -299,13 +398,11 @@ function AppInner() {
             </Button>
           </div>
 
-          <p className="col-start-2 row-start-2 text-xs leading-none text-foreground/70">
-            Enter translate · Shift+Enter newline · ⌘⇧C copy
-          </p>
-          <div className="col-start-3 row-start-2 min-w-0 truncate text-right text-xs leading-none text-foreground/60">
+          <p className="col-start-2 row-start-2 text-xs leading-none text-foreground/60">
             Backend model: {health.data?.model_name ?? "not loaded"} · API base:{" "}
             {import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}
-          </div>
+          </p>
+          <div className="col-start-3 row-start-2" />
         </header>
 
         {!modelReady ? (
@@ -342,9 +439,19 @@ function AppInner() {
                 variant="ghost"
                 onClick={onSwap}
                 title="Swap languages"
+                aria-label="Swap languages"
                 size="sm"
               >
-                Swap
+                <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                  <path
+                    d="M7 7h13m0 0-3-3m3 3-3 3M17 17H4m0 0 3-3m-3 3 3 3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
               </Button>
             </div>
             <div className="flex items-center justify-center">
@@ -402,21 +509,111 @@ function AppInner() {
             ) : null}
             <div className={["grid grid-cols-1 gap-4 md:grid-cols-2", isSwapping ? "swap-animate" : ""].join(" ")}>
               <div className="swap-item swap-left">
-                <Textarea
-                  ref={sourceTextRef}
-                  className="h-[42vh] min-h-[360px] text-base md:h-[58vh] md:min-h-[520px] md:max-h-[720px]"
-                  value={sourceText}
-                  onChange={(e) => setSourceText(e.target.value)}
-                  placeholder="Enter text to translate…"
-                />
+                <div
+                  className={[
+                    "group relative overflow-hidden rounded-xl border border-border bg-surface2 shadow-sky",
+                    "h-[42vh] min-h-[360px] md:h-[58vh] md:min-h-[520px] md:max-h-[720px]",
+                    "transition-colors duration-200 ease-out-expo",
+                    "focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/35",
+                  ].join(" ")}
+                >
+                  <Textarea
+                    ref={sourceTextRef}
+                    className={[
+                      "h-full min-h-0 w-full rounded-none border-0 bg-transparent shadow-none",
+                      "px-3.5 py-3 pr-12 text-base leading-relaxed",
+                      "focus:border-transparent focus:ring-0",
+                    ].join(" ")}
+                    value={sourceText}
+                    onChange={(e) => setSourceText(e.target.value)}
+                    placeholder="Enter text to translate…"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCopySource();
+                      flashCopied("source");
+                    }}
+                    disabled={sourceText.trim().length === 0}
+                    title="Copy source"
+                    aria-label="Copy source"
+                    className={[
+                      "absolute bottom-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-border",
+                      "bg-surface/80 text-foreground shadow-skyLift backdrop-blur",
+                      "transition-opacity duration-200 ease-out-expo",
+                      "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                      "focus:outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/35",
+                      "disabled:cursor-not-allowed disabled:opacity-40",
+                    ].join(" ")}
+                  >
+                    {sourceCopied ? (
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                        <path
+                          d="M20 6 9 17l-5-5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                        <path
+                          d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1Zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16h-9V7h9v14Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="swap-item swap-right">
                 <div
-                  className="h-[42vh] min-h-[360px] overflow-hidden rounded-xl border border-border bg-surface2 shadow-sky md:h-[58vh] md:min-h-[520px] md:max-h-[720px]"
+                  className="group relative h-[42vh] min-h-[360px] overflow-hidden rounded-xl border border-border bg-surface2 shadow-sky md:h-[58vh] md:min-h-[520px] md:max-h-[720px]"
                   onClick={onOutputClick}
                 >
-                  <div className="h-full overflow-auto whitespace-pre-wrap break-words px-3 py-2.5 text-base leading-relaxed">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCopy();
+                      flashCopied("translation");
+                    }}
+                    disabled={!translated?.translated_text}
+                    title="Copy translation"
+                    aria-label="Copy translation"
+                    className={[
+                      "absolute bottom-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border border-border",
+                      "bg-surface/80 text-foreground shadow-skyLift backdrop-blur",
+                      "transition-opacity duration-200 ease-out-expo",
+                      "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                      "focus:outline-none focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/35",
+                      "disabled:cursor-not-allowed disabled:opacity-40",
+                    ].join(" ")}
+                  >
+                    {translationCopied ? (
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                        <path
+                          d="M20 6 9 17l-5-5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                        <path
+                          d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1Zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16h-9V7h9v14Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                  <div className="h-full overflow-auto whitespace-pre-wrap break-words px-3 py-2.5 pr-12 text-base leading-relaxed">
                     {translated?.translated_text || (
                       <span className="text-foreground/50">Your translation will appear here.</span>
                     )}
@@ -524,7 +721,7 @@ function AppInner() {
                   {translated.used_mode}
                 </Badge>
               ) : null}
-              <Badge>{translated ? `${translated.latency_ms}ms` : "—"}</Badge>
+              <Badge>{translated && translated.latency_ms > 0 ? `${translated.latency_ms}ms` : "—"}</Badge>
             </div>
           </div>
         </div>
