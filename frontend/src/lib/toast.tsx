@@ -26,7 +26,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "rounded-lg border border-border bg-white px-3 py-2 shadow-soft",
+              "rounded-lg border border-border bg-surface px-3 py-2 shadow-soft",
               "text-sm text-foreground",
             )}
           >
@@ -43,4 +43,3 @@ export function useToast() {
   if (!ctx) throw new Error("useToast must be used within ToastProvider");
   return ctx;
 }
-
