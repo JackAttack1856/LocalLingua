@@ -58,6 +58,6 @@ If you want to develop the UI without a model, set:
 3. Click **Translate** and copy the result.
 4. Open History and restore a previous translation.
 
---
+---
 Made using ChatGPT Codex
 
