@@ -18,6 +18,18 @@ from .translator.lang_detect import detect_language
 from .translator.llama_cpp import LlamaCppConfig, LlamaCppTranslator
 
 
+def _normalize_for_compare(text: str) -> str:
+    return " ".join((text or "").strip().lower().split())
+
+
+def _is_passthrough(*, source_text: str, translated_text: str) -> bool:
+    return _normalize_for_compare(source_text) == _normalize_for_compare(translated_text)
+
+
+def _has_any_letter(text: str) -> bool:
+    return any(ch.isalpha() for ch in (text or ""))
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="LocalLingua API", version="0.1.0")
 
@@ -114,33 +126,66 @@ def create_app() -> FastAPI:
             )
 
         detected = None
+        detection_confidence = None
+        effective_source_lang = req.source_lang
         if req.source_lang == "auto":
             detection = detect_language(req.text)
-            if detection.code and (detection.confidence or 0.0) >= 0.70:
-                detected = detection.code
+            detection_confidence = detection.confidence
+            if detection.code and is_supported(detection.code):
+                # Be more permissive for short inputs so we don't fall back to "Unknown" unnecessarily.
+                threshold = 0.35 if len(req.text.strip()) <= 20 else 0.70
+                if (detection.confidence or 0.0) >= threshold:
+                    detected = detection.code
+                    effective_source_lang = detected
 
         start = time.perf_counter()
-        try:
-            result = await translator.translate(
-                text=req.text,
-                source_lang=req.source_lang,
-                target_lang=req.target_lang,
-                options=req.options.model_dump(),
-            )
-        except FileNotFoundError:
-            raise ApiError(
-                "MODEL_NOT_FOUND",
-                "The configured model file was not found. Check LOCALLINGUA_MODEL_PATH.",
-                503,
-            )
-        except RuntimeError as exc:
-            if str(exc) == "LLAMA_CPP_NOT_INSTALLED":
+        requested_mode = req.options.mode
+
+        async def _run_translate(mode: str):
+            try:
+                return await translator.translate(
+                    text=req.text,
+                    source_lang=effective_source_lang,
+                    target_lang=req.target_lang,
+                    options={**req.options.model_dump(), "mode": mode},
+                )
+            except FileNotFoundError:
                 raise ApiError(
-                    "LLAMA_CPP_NOT_INSTALLED",
-                    "llama-cpp-python is not installed. Install backend deps with the llama extra.",
+                    "MODEL_NOT_FOUND",
+                    "The configured model file was not found. Check LOCALLINGUA_MODEL_PATH.",
                     503,
                 )
-            raise
+            except RuntimeError as exc:
+                if str(exc) == "LLAMA_CPP_NOT_INSTALLED":
+                    raise ApiError(
+                        "LLAMA_CPP_NOT_INSTALLED",
+                        "llama-cpp-python is not installed. Install backend deps with the llama extra.",
+                        503,
+                    )
+                raise
+
+        used_mode: str | None = None
+        if requested_mode == "natural":
+            result = await _run_translate("natural")
+            used_mode = "natural"
+        elif requested_mode == "literal":
+            result = await _run_translate("literal")
+            used_mode = "literal"
+        else:
+            # smart: try literal first; if unchanged, retry once with natural.
+            result = await _run_translate("literal")
+            used_mode = "literal"
+            should_retry = (
+                _has_any_letter(req.text)
+                and _is_passthrough(source_text=req.text, translated_text=result.translated_text)
+                and not (effective_source_lang != "auto" and req.target_lang == effective_source_lang)
+            )
+            if should_retry:
+                natural_result = await _run_translate("natural")
+                if not _is_passthrough(source_text=req.text, translated_text=natural_result.translated_text):
+                    result = natural_result
+                    used_mode = "natural"
+
         latency_ms = int((time.perf_counter() - start) * 1000)
 
         if not result.translated_text.strip():
@@ -153,6 +198,8 @@ def create_app() -> FastAPI:
         return TranslateResponse(
             translated_text=result.translated_text,
             detected_source_lang=detected or result.detected_source_lang,
+            detection_confidence=detection_confidence,
+            used_mode=used_mode,
             latency_ms=latency_ms,
         )
 

@@ -9,6 +9,7 @@ type Props = {
   placeholder: string;
   includeAuto?: boolean;
   disabled?: boolean;
+  placeholderClassName?: string;
 };
 
 export function LanguagePicker({
@@ -18,6 +19,7 @@ export function LanguagePicker({
   placeholder,
   includeAuto,
   disabled,
+  placeholderClassName,
 }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -35,6 +37,11 @@ export function LanguagePicker({
     const found = languages.find((l) => l.code === value);
     return found ? found.name : placeholder;
   }, [includeAuto, languages, placeholder, value]);
+
+  const isPlaceholder = React.useMemo(() => {
+    if (includeAuto && value === "auto") return false;
+    return !languages.some((l) => l.code === value);
+  }, [includeAuto, languages, value]);
 
   React.useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -54,22 +61,27 @@ export function LanguagePicker({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "inline-flex w-[220px] items-center justify-between rounded-md border border-border bg-white px-3 py-2 text-sm",
-          "hover:bg-muted/50 disabled:opacity-50",
+          "group inline-flex w-auto min-w-[80px] max-w-[240px] items-center justify-between rounded-full border border-transparent bg-transparent px-2 py-1.5 text-base font-medium text-foreground",
+          "transition-colors duration-200 ease-out-expo",
+          "hover:border-border hover:bg-surface2",
+          "focus-visible:border-blue-500 focus-visible:bg-surface2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/35",
+          "disabled:opacity-50",
         )}
       >
-        <span className="truncate">{selected}</span>
-        <span className="ml-2 text-xs text-foreground/60">⌄</span>
+        <span className={cn("truncate", isPlaceholder && placeholderClassName)}>{selected}</span>
+        <span className="ml-1 text-sm text-foreground/60 opacity-0 transition-opacity duration-200 ease-out-expo group-hover:opacity-100 group-focus-visible:opacity-100">
+          ▾
+        </span>
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-[44px] z-20 w-[320px] rounded-lg border border-border bg-white p-2 shadow-soft">
+        <div className="absolute left-0 top-[46px] z-20 w-[340px] rounded-2xl border border-border bg-surface p-2 text-foreground shadow-skyLift">
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search…"
-            className="mb-2 w-full rounded-md border border-border px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="mb-2 w-full rounded-xl border border-border bg-surface2 px-3 py-2 text-sm placeholder:text-foreground/40 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/35"
           />
           <div className="max-h-[280px] overflow-auto">
             {items.length === 0 ? (
@@ -85,7 +97,8 @@ export function LanguagePicker({
                     setQuery("");
                   }}
                   className={cn(
-                    "flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm",
+                    "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm",
+                    "transition-colors duration-200 ease-out-expo",
                     "hover:bg-muted",
                     value === l.code && "bg-muted",
                   )}
@@ -102,4 +115,3 @@ export function LanguagePicker({
     </div>
   );
 }
-

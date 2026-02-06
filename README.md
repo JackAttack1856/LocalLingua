@@ -36,6 +36,10 @@ Recommended folder:
 Example:
 - `LOCALLINGUA_MODEL_PATH=/Users/you/Models/LocalLingua/translategemma-4b-q4_k_m.gguf`
 
+### Quantization quick guide
+- `Q4_K_M`: recommended default (smaller + faster; great for demos).
+- `Q8_0`: higher fidelity but larger + typically slower.
+
 If you want to develop the UI without a model, set:
 - `LOCALLINGUA_ALLOW_FAKE_TRANSLATOR=1`
 

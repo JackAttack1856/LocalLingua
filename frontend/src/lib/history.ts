@@ -7,6 +7,8 @@ export type HistoryItem = {
   targetLang: string;
   detectedSourceLang: string | null;
   latencyMs: number;
+  mode: "smart" | "literal" | "natural";
+  usedMode?: "literal" | "natural" | null;
 };
 
 const KEY = "locallingua.history.v1";
@@ -18,7 +20,10 @@ export function loadHistory(): HistoryItem[] {
   try {
     const parsed = JSON.parse(raw) as HistoryItem[];
     if (!Array.isArray(parsed)) return [];
-    return parsed;
+    return parsed.map((item) => ({
+      ...item,
+      mode: (item as Partial<HistoryItem>).mode ?? "smart",
+    }));
   } catch {
     return [];
   }
@@ -38,4 +43,3 @@ export function addToHistory(item: HistoryItem) {
 export function clearHistory() {
   localStorage.removeItem(KEY);
 }
-

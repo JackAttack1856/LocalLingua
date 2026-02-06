@@ -26,6 +26,8 @@ test("history add/load/clear", () => {
     targetLang: "es",
     detectedSourceLang: "en",
     latencyMs: 10,
+    mode: "smart",
+    usedMode: "natural",
   });
 
   const items = loadHistory();

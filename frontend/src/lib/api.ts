@@ -8,6 +8,7 @@ export type Language = { code: string; name: string };
 export type LanguagesResponse = { languages: Language[] };
 
 export type TranslateOptions = {
+  mode?: "smart" | "literal" | "natural";
   temperature?: number;
   top_p?: number;
   max_tokens?: number;
@@ -24,6 +25,8 @@ export type TranslateRequest = {
 export type TranslateResponse = {
   translated_text: string;
   detected_source_lang: string | null;
+  detection_confidence?: number | null;
+  used_mode?: "literal" | "natural" | null;
   latency_ms: number;
 };
 
@@ -63,4 +66,3 @@ export function postTranslate(body: TranslateRequest) {
     body: JSON.stringify(body),
   });
 }
-

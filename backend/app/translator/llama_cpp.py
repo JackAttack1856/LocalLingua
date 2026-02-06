@@ -51,7 +51,14 @@ class LlamaCppTranslator(Translator):
         target_lang: str,
         options: dict,
     ) -> TranslationResult:
-        prompt = build_translation_prompt(text=text, source_lang=source_lang, target_lang=target_lang)
+        requested_mode = options.get("mode") or "literal"
+        mode = "natural" if requested_mode == "natural" else "literal"
+        prompt = build_translation_prompt(
+            text=text,
+            source_lang=source_lang,
+            target_lang=target_lang,
+            mode=mode,
+        )
 
         async with self._semaphore:
             llm = self._load()

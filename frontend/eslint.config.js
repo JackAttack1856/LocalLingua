@@ -9,6 +9,12 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ["**/*.cjs", "vite.config.ts", "tailwind.config.ts"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2022,
@@ -24,4 +30,3 @@ export default tseslint.config(
     }
   }
 );
-
