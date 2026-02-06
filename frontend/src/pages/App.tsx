@@ -266,7 +266,7 @@ function AppInner() {
       />
 
       <div className="mx-auto max-w-7xl px-6 py-6">
-        <header className="mb-5 grid min-w-0 grid-cols-[auto_1fr] grid-rows-2 items-center gap-x-3 gap-y-1">
+        <header className="mb-4 grid min-w-0 grid-cols-[auto_1fr_minmax(0,520px)] grid-rows-2 items-start gap-x-3 gap-y-0">
           <div className="row-span-2 flex h-10 w-10 items-center justify-center">
             <svg
               viewBox="0 0 117.17 122.88"
@@ -282,34 +282,30 @@ function AppInner() {
             </svg>
           </div>
 
-          <h1 className="col-start-2 row-start-1 text-xl font-semibold tracking-tight">LocalLingua</h1>
-          <div className="col-start-2 row-start-2 mt-0.5 grid min-w-0 grid-cols-[auto_1fr_minmax(0,520px)] items-start gap-x-3">
-            <p className="min-w-0 text-xs text-foreground/70">
-              Enter translate · Shift+Enter newline · ⌘⇧C copy
-            </p>
+          <h1 className="col-start-2 row-start-1 text-xl font-semibold leading-none tracking-tight">LocalLingua</h1>
+          <div className="col-start-3 row-start-1 min-w-0 truncate text-right text-xs text-foreground/60">
+            Backend model: {health.data?.model_name ?? "not loaded"} · API base:{" "}
+            {import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}
+          </div>
 
-            <div />
-
-            <div className="flex min-w-0 flex-col items-end gap-1">
-              <div className="min-w-0 truncate text-right text-xs text-foreground/60">
-                Backend model: {health.data?.model_name ?? "not loaded"} · API base:{" "}
-                {import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="justify-end"
-                onClick={() => {
-                  const next: Theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
-                  setTheme(next);
-                  push(`Theme: ${next}`);
-                }}
-                title="Toggle theme (system → light → dark)"
-              >
-                <ThemeIcon theme={theme} />
-                <span className="hidden sm:inline">{theme}</span>
-              </Button>
-            </div>
+          <p className="col-start-2 row-start-2 text-xs leading-none text-foreground/70">
+            Enter translate · Shift+Enter newline · ⌘⇧C copy
+          </p>
+          <div className="col-start-3 row-start-2 flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="justify-end"
+              onClick={() => {
+                const next: Theme = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
+                setTheme(next);
+                push(`Theme: ${next}`);
+              }}
+              title="Toggle theme (system → light → dark)"
+            >
+              <ThemeIcon theme={theme} />
+              <span className="hidden sm:inline">{theme}</span>
+            </Button>
           </div>
         </header>
 
